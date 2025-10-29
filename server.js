@@ -114,3 +114,7 @@ app.get("/api/poll/:id/results", async (req, res) => {
 
 const PORT = 3000;
 app.listen(PORT, () => console.log("Server running at http://localhost:" + PORT));
+app.delete('/api/reset', async (req, res) => {
+  await Votes.deleteMany({});
+  res.send("All votes cleared!");
+});
