@@ -220,134 +220,128 @@
     </div>
   </div>
 
-  <script>
-    const pollId = 1; // change if necessary or parse from URL
-    
-    // Enhanced loading function with better UX
-    async function loadPoll() {
-      try {
-        const response = await fetch('/api/poll/' + pollId);
-        if (!response.ok) {
-          throw new Error('Failed to load poll');
-        }
-        
-        const data = await response.json();
-        document.getElementById('title').innerText = data.poll.title;
-        
-        const optionsContainer = document.getElementById('options');
-        optionsContainer.innerHTML = '';
-        optionsContainer.classList.remove('loading');
-        
-        data.options.forEach(option => {
-          const optionElement = document.createElement('div');
-          optionElement.className = 'option';
-          optionElement.innerHTML = `
-            <input type="checkbox" name="choice" id="option-${option.id}" value="${option.id}">
-            <label for="option-${option.id}">${option.label}</label>
-          `;
-          optionsContainer.appendChild(optionElement);
-          
-          // Add click event to the entire option div
-          optionElement.addEventListener('click', function(e) {
-            if (e.target.type !== 'checkbox') {
-              const checkbox = this.querySelector('input[type="checkbox"]');
-              checkbox.checked = !checkbox.checked;
-              this.classList.toggle('selected', checkbox.checked);
-              updateSubmitButton();
-            }
-          });
-          
-          // Add change event to the checkbox
-          const checkbox = optionElement.querySelector('input[type="checkbox"]');
-          checkbox.addEventListener('change', function() {
-            optionElement.classList.toggle('selected', this.checked);
+<script>
+  // 🔹 Replace with your deployed domain on Vercel (for local testing use http://localhost:3000)
+  const BASE_URL = window.location.origin; // auto-detects correct domain
+  const pollId = 1;
+
+  async function loadPoll() {
+    try {
+      const response = await fetch(`${BASE_URL}/api/poll/${pollId}`);
+      if (!response.ok) throw new Error('Failed to load poll');
+
+      const data = await response.json();
+      document.getElementById('title').innerText = data.poll.title;
+
+      const optionsContainer = document.getElementById('options');
+      optionsContainer.innerHTML = '';
+      optionsContainer.classList.remove('loading');
+
+      data.options.forEach(option => {
+        const optionElement = document.createElement('div');
+        optionElement.className = 'option';
+        optionElement.innerHTML = `
+          <input type="checkbox" name="choice" id="option-${option.id}" value="${option.id}">
+          <label for="option-${option.id}">${option.label}</label>
+        `;
+        optionsContainer.appendChild(optionElement);
+
+        optionElement.addEventListener('click', e => {
+          if (e.target.type !== 'checkbox') {
+            const checkbox = optionElement.querySelector('input[type="checkbox"]');
+            checkbox.checked = !checkbox.checked;
+            optionElement.classList.toggle('selected', checkbox.checked);
             updateSubmitButton();
-          });
+          }
         });
-        
-        updateSubmitButton();
-      } catch (error) {
-        console.error('Error loading poll:', error);
-        document.getElementById('options').innerHTML = 
-          '<div class="status error">Failed to load poll. Please try again later.</div>';
-      }
-    }
-    
-    // Update submit button state based on selections
-    function updateSubmitButton() {
-      const selectedCount = document.querySelectorAll('input[name="choice"]:checked').length;
-      const submitBtn = document.querySelector('.submit-btn');
-      submitBtn.disabled = selectedCount === 0;
-      submitBtn.textContent = selectedCount === 0 
-        ? 'Select at least one option' 
-        : `Submit Vote (${selectedCount} selected)`;
-    }
-    
-    // Enhanced form submission with better feedback
-    document.getElementById('pollForm').addEventListener('submit', async e => {
-      e.preventDefault();
-      
-      const choices = Array.from(document.querySelectorAll('input[name="choice"]:checked'))
-        .map(input => +input.value);
-      
-      if (choices.length === 0) {
-        showStatus('Please select at least one option', 'error');
-        return;
-      }
-      
-      const submitBtn = document.querySelector('.submit-btn');
-      const originalText = submitBtn.textContent;
-      submitBtn.disabled = true;
-      submitBtn.textContent = 'Submitting...';
-      
-      try {
-        const response = await fetch('/api/poll/' + pollId + '/vote', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ choices })
+
+        const checkbox = optionElement.querySelector('input[type="checkbox"]');
+        checkbox.addEventListener('change', () => {
+          optionElement.classList.toggle('selected', checkbox.checked);
+          updateSubmitButton();
         });
-        
-        const result = await response.json();
-        
-        if (result.ok) {
-          showStatus('Thank you! Your vote has been recorded anonymously.', 'success');
-          document.getElementById('pollForm').reset();
-          document.querySelectorAll('.option').forEach(opt => {
-            opt.classList.remove('selected');
-          });
-          submitBtn.textContent = 'Vote Submitted';
-          submitBtn.disabled = true;
-        } else {
-          throw new Error(result.error || 'Unknown error occurred');
-        }
-      } catch (error) {
-        console.error('Error submitting vote:', error);
-        showStatus('Error: ' + error.message, 'error');
-        submitBtn.disabled = false;
-        submitBtn.textContent = originalText;
+      });
+
+      updateSubmitButton();
+    } catch (error) {
+      console.error('Error loading poll:', error);
+      document.getElementById('options').innerHTML =
+        '<div class="status error">Failed to load poll. Please try again later.</div>';
+    }
+  }
+
+  function updateSubmitButton() {
+    const selectedCount = document.querySelectorAll('input[name="choice"]:checked').length;
+    const submitBtn = document.querySelector('.submit-btn');
+    submitBtn.disabled = selectedCount === 0;
+    submitBtn.textContent =
+      selectedCount === 0 ? 'Select at least one option' : `Submit Vote (${selectedCount} selected)`;
+  }
+
+  document.getElementById('pollForm').addEventListener('submit', async e => {
+    e.preventDefault();
+
+    const choices = Array.from(document.querySelectorAll('input[name="choice"]:checked')).map(
+      input => +input.value
+    );
+
+    if (choices.length === 0) {
+      showStatus('Please select at least one option', 'error');
+      return;
+    }
+
+    const submitBtn = document.querySelector('.submit-btn');
+    const originalText = submitBtn.textContent;
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Submitting...';
+
+    try {
+      const voter_uuid = localStorage.getItem('voter_uuid') || crypto.randomUUID();
+      localStorage.setItem('voter_uuid', voter_uuid);
+
+      const response = await fetch(`${BASE_URL}/api/poll/${pollId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ choices, voter_uuid })
+      });
+
+      const result = await response.json();
+
+      if (result.ok) {
+        showStatus('✅ Thank you! Your vote has been recorded.', 'success');
+        document.getElementById('pollForm').reset();
+        document.querySelectorAll('.option').forEach(opt => opt.classList.remove('selected'));
+        submitBtn.textContent = 'Vote Submitted';
+        submitBtn.disabled = true;
+      } else {
+        throw new Error(result.error || 'Unknown error');
       }
-    });
-    
-    // Show status message
-    function showStatus(message, type) {
-      const statusElement = document.getElementById('status');
-      statusElement.textContent = message;
-      statusElement.className = 'status ' + type;
-      
-      // Auto-hide success messages after 5 seconds
-      if (type === 'success') {
+    } catch (error) {
+      console.error('Error submitting vote:', error);
+      showStatus('Error: ' + error.message, 'error');
+      submitBtn.disabled = false;
+      submitBtn.textContent = originalText;
+    }
+  });
+
+  function showStatus(message, type) {
+    const statusElement = document.getElementById('status');
+    statusElement.textContent = message;
+    statusElement.className = 'status ' + type;
+
+    if (type === 'success') {
+      setTimeout(() => {
+        statusElement.style.opacity = '0';
         setTimeout(() => {
-          statusElement.style.opacity = '0';
-          setTimeout(() => {
-            statusElement.className = 'status';
-            statusElement.style.opacity = '1';
-          }, 500);
-        }, 5000);
-      }
+          statusElement.className = 'status';
+          statusElement.style.opacity = '1';
+        }, 500);
+      }, 5000);
     }
-    
-    // Initialize the poll
-    loadPoll();
-  </script>
+  }
+
+  loadPoll();
+</script>
+
 </body>
 </html>
