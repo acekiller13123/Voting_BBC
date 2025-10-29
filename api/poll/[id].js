@@ -7,6 +7,8 @@ let dbPromise = open({ filename: './votes.db', driver: sqlite3.Database });
 
 export default async function handler(req, res) {
   const db = await dbPromise;
+  const pollId = req.query.id || 1;
+
   await db.exec(`
     CREATE TABLE IF NOT EXISTS polls (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -33,7 +35,6 @@ export default async function handler(req, res) {
     );
   `);
 
-  // make sure one poll exists
   const exists = await db.get('SELECT id FROM polls LIMIT 1');
   if (!exists) {
     await db.run('INSERT INTO polls (title) VALUES (?)', ['Vote Your Favourites']);
@@ -43,38 +44,31 @@ export default async function handler(req, res) {
       await db.run('INSERT INTO options (poll_id, label) VALUES (?, ?)', pollId, n);
   }
 
-  const { method, query, body } = req;
-  const pollId = query.id || 1;
+  const cookies = cookie.parse(req.headers.cookie || '');
+  let voterUUID = cookies.voter_uuid || uuidv4();
+  res.setHeader(
+    'Set-Cookie',
+    cookie.serialize('voter_uuid', voterUUID, {
+      httpOnly: true,
+      maxAge: 31536000,
+      path: '/',
+    })
+  );
 
-  if (method === 'GET') {
+  if (req.method === 'GET') {
     const poll = await db.get('SELECT * FROM polls WHERE id = ?', pollId);
     const options = await db.all('SELECT * FROM options WHERE poll_id = ?', pollId);
-
-    const cookies = cookie.parse(req.headers.cookie || '');
-    let voterUUID = cookies.voter_uuid || uuidv4();
-    res.setHeader(
-      'Set-Cookie',
-      cookie.serialize('voter_uuid', voterUUID, {
-        httpOnly: true,
-        maxAge: 31536000,
-        path: '/',
-      })
-    );
-
     const voter = await db.get(
       'SELECT voted FROM voters WHERE poll_id = ? AND voter_uuid = ?',
       pollId,
       voterUUID
     );
-
     return res.json({ poll, options, alreadyVoted: voter?.voted || 0 });
   }
 
-  if (method === 'POST') {
-    const { choices } = body;
-    const cookies = cookie.parse(req.headers.cookie || '');
-    const voterUUID = cookies.voter_uuid;
-    if (!voterUUID) return res.status(400).json({ error: 'Missing voter ID' });
+  if (req.method === 'POST') {
+    const { choices } = req.body;
+    if (!choices?.length) return res.status(400).json({ error: 'No choices provided' });
 
     const voter = await db.get(
       'SELECT voted FROM voters WHERE poll_id = ? AND voter_uuid = ?',
@@ -97,12 +91,6 @@ export default async function handler(req, res) {
     );
 
     return res.json({ ok: true });
-  }
-
-  if (method === 'DELETE') {
-    await db.run('DELETE FROM votes');
-    await db.run('DELETE FROM voters');
-    return res.json({ ok: true, msg: 'Votes reset' });
   }
 
   res.status(405).json({ error: 'Method not allowed' });

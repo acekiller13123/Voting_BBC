@@ -2,7 +2,6 @@
   "name": "voting-app",
   "version": "1.0.0",
   "type": "module",
-  "scripts": { "start": "node api/poll.js" },
   "dependencies": {
     "cookie": "^0.6.0",
     "sqlite": "^5.1.1",
